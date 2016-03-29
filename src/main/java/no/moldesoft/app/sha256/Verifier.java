@@ -22,10 +22,6 @@ import java.util.Map;
 public class Verifier {
     private Map<String, String> options;
 
-    Map<String, String> getOptions() {
-        return options;
-    }
-
     public static void main(String[] args) {
         try {
             new Verifier().run(args);
@@ -156,6 +152,8 @@ public class Verifier {
         System.out.println("    -file=<file> or -file <file>, file to check");
         System.out.println("    -hash=<hash> or -hash <hash>, hash to verify");
         System.out.println("  System variables:");
-        System.out.println("  -Ddigest=MD5, -Ddigest=SHA-1 or -Ddigest=SHA-256 (default)");
+        System.out.println("    -Ddigest=<algorithm>, default algorithm is SHA-256");
+        System.out.println("  Standard hash algorithms as of Java 8:");
+        System.out.println("    MD2, MD5, SHA-1, SHA-256, SHA-384, SHA-512");
     }
 }
