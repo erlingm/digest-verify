@@ -11,7 +11,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -20,7 +20,7 @@ import java.util.Map;
  * Created by Erling Molde on 17.03.2016.
  */
 public class Verifier {
-    private Map<String, String> options;
+    private Map<Key, String> options;
 
     public static void main(String[] args) {
         try {
@@ -31,16 +31,16 @@ public class Verifier {
     }
 
     private void run(String[] args) throws IOException, NoSuchAlgorithmException {
-        options = new HashMap<>();
+        options = new EnumMap<>(Key.class);
         List<String> unknownOptions = new ArrayList<>();
         List<String> noOptionsArgs = options(args, options, unknownOptions);
         if (unknownOptions.isEmpty()) {
             processNoOptionsArgs(options, noOptionsArgs);
-            if (options.containsKey("file")) {
-                if (options.containsKey("hash"))
-                    verifyHash(options.get("file"), options.get("hash"));
+            if (options.containsKey(Key.file)) {
+                if (options.containsKey(Key.hash))
+                    verifyHash(options.get(Key.hash), options.get(Key.file));
                 else
-                    showHash(options.get("file"));
+                    showHash(options.get(Key.file));
             } else {
                 help();
             }
@@ -50,28 +50,56 @@ public class Verifier {
         }
     }
 
-    void processNoOptionsArgs(Map<String, String> options, List<String> noOptionsArgs) {
+    void processNoOptionsArgs(Map<Key, String> options, List<String> noOptionsArgs) {
         switch (noOptionsArgs.size()) {
             case 1:
-                if (!options.containsKey("file"))
-                    options.put("file", noOptionsArgs.get(0).trim());
-                else if (!options.containsKey("hash"))
-                    options.put("hash", noOptionsArgs.get(0).trim());
+                if (!options.containsKey(Key.file))
+                    options.put(Key.file, noOptionsArgs.get(0).trim());
+                else if (!options.containsKey(Key.hash)) {
+                    String hashValue = noOptionsArgs.get(0).trim();
+                    options.put(Key.hash, hashValue);
+                }
                 break;
             case 2:
-                if (!options.containsKey("file"))
-                    options.put("file", noOptionsArgs.get(1).trim());
-                if (!options.containsKey("hash"))
-                    options.put("hash", noOptionsArgs.get(0).trim());
+                if (!options.containsKey(Key.file))
+                    options.put(Key.file, noOptionsArgs.get(1).trim());
+                if (!options.containsKey(Key.hash)) {
+                    String hashValue = noOptionsArgs.get(0).trim();
+                    options.put(Key.hash, hashValue);
+                    checkDigest(options);
+                }
                 break;
+        }
+        options.putIfAbsent(Key.digest, "SHA-256");
+    }
+
+    private void checkDigest(Map<Key, String> options) {
+        options.computeIfAbsent(Key.digest, key -> lookup(options.get(Key.hash)));
+    }
+
+    private String lookup(String hash) {
+        switch (hash.length()) {
+            case 40:
+                return "SHA-1";
+            case 64:
+                return "SHA-256";
+            case 96:
+                return "SHA-384";
+            case 128:
+                return "SHA-512";
+            case 32:
+                return "MD5";
+            default:
+                throw new RuntimeException("Unknown length of hash string, can't guess which algorithm");
         }
     }
 
-    List<String> options(String[] allArgs, Map<String, String> options, List<String> unknownOptions) {
-        options.put("digest", "SHA-256");
+    enum Key {digest, hash, file}
+
+    List<String> options(String[] allArgs, Map<Key, String> options, List<String> unknownOptions) {
         List<String> args = new ArrayList<>();
         List<String> argsList = Arrays.asList(allArgs);
-        String[] keys = {"digest", "hash", "file"};
+        Key[] keys = Key.values();
         for (Iterator<String> iterator = argsList.iterator(); iterator.hasNext(); ) {
             String arg = iterator.next();
             int ix = 0;
@@ -90,9 +118,9 @@ public class Verifier {
                     name = option.substring(0, ixEq).trim();
                     value = option.substring(ixEq + 1).trim();
                 }
-                String keyToUse = null;
-                for (String key : keys) {
-                    if (name.regionMatches(true, 0, key, 0, name.length())) {
+                Key keyToUse = null;
+                for (Key key: keys) {
+                    if (name.regionMatches(true, 0, key.name(), 0, name.length())) {
                         keyToUse = key;
                         break;
                     }
@@ -112,11 +140,11 @@ public class Verifier {
     private void verifyHash(String hashToMatch, String fileName) throws IOException, NoSuchAlgorithmException {
         String digestAlgorithm = getHashAlgorithm();
         String hash = getHash(fileName, digestAlgorithm);
-        System.out.printf("Match using %s: %b%n", digestAlgorithm, hash != null && hash.equalsIgnoreCase(hashToMatch));
+        System.out.printf("Match using %s: %b%n", digestAlgorithm, hash.equalsIgnoreCase(hashToMatch));
     }
 
     private String getHashAlgorithm() {
-        return System.getProperty("digest", options.get("digest"));
+        return System.getProperty("digest", options.get(Key.digest));
     }
 
     private void showHash(String fileName) throws IOException, NoSuchAlgorithmException {
@@ -133,13 +161,17 @@ public class Verifier {
             messageDigest.update(mappedByteBuffer);
         }
         byte[] digest = messageDigest.digest();
+        return toHexString(digest);
+    }
+
+    private String toHexString(byte[] digest) {
         char[] hexDigs = new char[digest.length << 1];
         for (int i = 0; i < digest.length; i++) {
             byte b = digest[i];
             hexDigs[i << 1] = Character.forDigit(b >> 4 & 0xf, 16);
             hexDigs[(i << 1) | 1] = Character.forDigit(b & 0xf, 16);
         }
-        return new String(hexDigs);
+        return String.valueOf(hexDigs);
     }
 
     private void help() {
@@ -148,7 +180,8 @@ public class Verifier {
         System.out.println("  One argument version: supply name of file to be checked as argument");
         System.out.println("  Two argument version: first argument: hash to match, second argument: name of file");
         System.out.println("  With named arguments (names may be abbreviated):");
-        System.out.println("    -digest=<algorithm> or -digest <algorithm>, algorithm is any available algorithm from Java");
+        System.out.println(
+                "    -digest=<algorithm> or -digest <algorithm>, algorithm is any available algorithm from Java");
         System.out.println("    -file=<file> or -file <file>, file to check");
         System.out.println("    -hash=<hash> or -hash <hash>, hash to verify");
         System.out.println("  System variables:");
