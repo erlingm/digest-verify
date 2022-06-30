@@ -9,17 +9,14 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.EnumMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.regex.Pattern;
 
 /*
  * Created by Erling Molde on 17.03.2016.
  */
 public class Verifier {
+    private static final Pattern commaSplitter = Pattern.compile(",");
     private Map<Key, String> options;
 
     public static void main(String[] args) {
@@ -37,10 +34,11 @@ public class Verifier {
         if (unknownOptions.isEmpty()) {
             processNoOptionsArgs(options, noOptionsArgs);
             if (options.containsKey(Key.file)) {
-                if (options.containsKey(Key.hash))
+                if (options.containsKey(Key.hash)) {
                     verifyHash(options.get(Key.hash), options.get(Key.file));
-                else
+                } else {
                     showHash(options.get(Key.file));
+                }
             } else {
                 help();
             }
@@ -53,16 +51,17 @@ public class Verifier {
     void processNoOptionsArgs(Map<Key, String> options, List<String> noOptionsArgs) {
         switch (noOptionsArgs.size()) {
             case 1:
-                if (!options.containsKey(Key.file))
+                if (!options.containsKey(Key.file)) {
                     options.put(Key.file, noOptionsArgs.get(0).trim());
-                else if (!options.containsKey(Key.hash)) {
+                } else if (!options.containsKey(Key.hash)) {
                     String hashValue = noOptionsArgs.get(0).trim();
                     options.put(Key.hash, hashValue);
                 }
                 break;
             case 2:
-                if (!options.containsKey(Key.file))
+                if (!options.containsKey(Key.file)) {
                     options.put(Key.file, noOptionsArgs.get(1).trim());
+                }
                 if (!options.containsKey(Key.hash)) {
                     String hashValue = noOptionsArgs.get(0).trim();
                     options.put(Key.hash, hashValue);
@@ -78,20 +77,16 @@ public class Verifier {
     }
 
     private String lookup(String hash) {
-        switch (hash.length()) {
-            case 40:
-                return "SHA-1";
-            case 64:
-                return "SHA-256";
-            case 96:
-                return "SHA-384";
-            case 128:
-                return "SHA-512";
-            case 32:
-                return "MD5";
-            default:
-                throw new RuntimeException("Unknown length of hash string, can't guess which algorithm");
-        }
+        return switch (hash.length() >>> 1) {
+            case 16 -> "MD5,MD4,MD2";
+            case 20 -> "SHA-1";
+            case 28 -> "SHA-512/224,SHA3-224,SHA-224";
+            case 32 -> "SHA-256,SHA-512/256,SHA3-256";
+            case 48 -> "SHA-384";
+            case 64 -> "SHA-512,SHA3-512";
+
+            default -> throw new RuntimeException("Unknown length of hash string, can't guess which algorithm");
+        };
     }
 
     enum Key {digest, hash, file}
@@ -103,8 +98,9 @@ public class Verifier {
         for (Iterator<String> iterator = argsList.iterator(); iterator.hasNext(); ) {
             String arg = iterator.next();
             int ix = 0;
-            while (ix < arg.length() && arg.charAt(ix) == '-')
+            while (ix < arg.length() && arg.charAt(ix) == '-') {
                 ix++;
+            }
             if (ix > 0) {
                 String option = arg.substring(ix);
                 String name;
@@ -112,14 +108,15 @@ public class Verifier {
                 int ixEq = option.indexOf('=');
                 if (ixEq == -1) {
                     name = option.trim();
-                    if (iterator.hasNext())
+                    if (iterator.hasNext()) {
                         value = iterator.next();
+                    }
                 } else {
                     name = option.substring(0, ixEq).trim();
                     value = option.substring(ixEq + 1).trim();
                 }
                 Key keyToUse = null;
-                for (Key key: keys) {
+                for (Key key : keys) {
                     if (name.regionMatches(true, 0, key.name(), 0, name.length())) {
                         keyToUse = key;
                         break;
@@ -139,8 +136,19 @@ public class Verifier {
 
     private void verifyHash(String hashToMatch, String fileName) throws IOException, NoSuchAlgorithmException {
         String digestAlgorithm = getHashAlgorithm();
-        String hash = getHash(fileName, digestAlgorithm);
-        System.out.printf("Match using %s: %b%n", digestAlgorithm, hash.equalsIgnoreCase(hashToMatch));
+        String[] algorithms = commaSplitter.split(digestAlgorithm);
+        boolean matches = false;
+        for (String algorithm : algorithms) {
+            String hash = getHash(fileName, algorithm);
+            matches = hash.equalsIgnoreCase(hashToMatch);
+            if (matches) {
+                System.out.printf("Match using %s: %b%n", algorithm, matches);
+                break;
+            }
+        }
+        if (!matches) {
+            System.out.printf("Match using %s: %b%n", String.join(" or ", algorithms), matches);
+        }
     }
 
     private String getHashAlgorithm() {
@@ -149,8 +157,11 @@ public class Verifier {
 
     private void showHash(String fileName) throws IOException, NoSuchAlgorithmException {
         String digestAlgorithm = getHashAlgorithm();
-        String hash = getHash(fileName, digestAlgorithm);
-        System.out.printf("Hash %s: %s%n", digestAlgorithm, hash);
+        String[] algorithms = commaSplitter.split(digestAlgorithm);
+        for (String algorithm : algorithms) {
+            String hash = getHash(fileName, algorithm);
+            System.out.printf("Hash %s: %s%n", algorithm, hash);
+        }
     }
 
     private String getHash(String fileName, String digestAlgorithm) throws NoSuchAlgorithmException, IOException {
@@ -186,7 +197,7 @@ public class Verifier {
         System.out.println("    -hash=<hash> or -hash <hash>, hash to verify");
         System.out.println("  System variables:");
         System.out.println("    -Ddigest=<algorithm>, default algorithm is SHA-256");
-        System.out.println("  Standard hash algorithms as of Java 8:");
-        System.out.println("    MD2, MD5, SHA-1, SHA-256, SHA-384, SHA-512");
+        System.out.println("  Standard hash algorithms as of Java 17:");
+        System.out.println("    MD2, MD4, MD5, SHA-1, SHA-224, SHA-256, SHA-384, SHA-512, SHA-512/224, SHA-512/256, SHA3-224, SHA3-256, SHA3-512");
     }
 }

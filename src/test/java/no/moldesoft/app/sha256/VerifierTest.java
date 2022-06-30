@@ -48,7 +48,7 @@ public class VerifierTest {
 
         verifier.processNoOptionsArgs(options, noOptionsArgs);
         assertThat(options.keySet(), hasItems(Verifier.Key.digest, Verifier.Key.hash, Verifier.Key.file));
-        assertThat(options.get(Verifier.Key.digest), equalTo("SHA-512"));
+        assertThat(options.get(Verifier.Key.digest), equalTo("SHA-512,SHA3-512"));
         assertThat(options.get(Verifier.Key.hash), equalTo(args[0]));
         assertThat(options.get(Verifier.Key.file), equalTo(args[1]));
     }
