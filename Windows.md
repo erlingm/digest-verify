@@ -7,4 +7,4 @@
     * Expect: jarfile="C:\Program Files\Java\jdk-11.0.1\bin\java.exe" -jar "%1" %*
     (or similar)
     * If javaw.exe in stead of java.exe, you will need to change it
-* Place the sha256.jar file in your path
+* Place the sha.jar file in your path
