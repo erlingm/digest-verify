@@ -1,5 +1,5 @@
 # Set up for use on Windows as a standalone application
-* Add .JAR to your PATHEXT environment variable
+* Add .JAR to your PATHEXT environment variable (to allow using the filename without extension as a command)
 * Check or set the association of .jar files to a command-line version of java
   * Check: `assoc .jar`
     * Expect: `.jar=jarfile`
