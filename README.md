@@ -13,4 +13,4 @@ to the digest also downloaded from the internet.
 
 Therefor I have modified it a little, so it can guess which algorithm to use
 based on the length of the first argument (the digest) when used this way, thereby
-avoding the need to explicitly provide the algorithm explicitly in this use case.
+avoiding the need to explicitly provide the algorithm in this use case.
