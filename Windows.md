@@ -8,3 +8,5 @@
     (or similar)
     * If javaw.exe in stead of java.exe, you will need to change it
 * Place the sha.jar file in your path
+
+_The associated filetype (ftype) can be anything you like, so you can create your own if you want to_
