@@ -9,4 +9,4 @@
     * If `javaw.exe` is shown in stead of `java.exe`, you should change it (this is meant to be a "command line" application)
 * Place the sha.jar file in your path
 
-_The associated filetype (ftype) can be anything you like, so you can create your own if you want to. Remember to update the reference to it with the_ assoc _command if you do._
+_The associated filetype (ftype) can be anything you like, so you can create your own if you want to. Remember to update the reference to it with the `assoc` command if you do._
