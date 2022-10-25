@@ -1,6 +1,7 @@
 package no.moldesoft.app.sha256;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
@@ -22,12 +23,12 @@ public class Verifier {
     public static void main(String[] args) {
         try {
             new Verifier().run(args);
-        } catch (IOException | NoSuchAlgorithmException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    private void run(String[] args) throws IOException, NoSuchAlgorithmException {
+    private void run(String[] args) {
         options = new EnumMap<>(Key.class);
         List<String> unknownOptions = new ArrayList<>();
         List<String> noOptionsArgs = options(args, options, unknownOptions);
@@ -97,82 +98,68 @@ public class Verifier {
         Key[] keys = Key.values();
         for (Iterator<String> iterator = argsList.iterator(); iterator.hasNext(); ) {
             String arg = iterator.next();
-            int ix = 0;
-            while (ix < arg.length() && arg.charAt(ix) == '-') {
-                ix++;
-            }
-            if (ix > 0) {
-                String option = arg.substring(ix);
-                String name;
-                String value = null;
-                int ixEq = option.indexOf('=');
-                if (ixEq == -1) {
-                    name = option.trim();
-                    if (iterator.hasNext()) {
-                        value = iterator.next();
-                    }
-                } else {
-                    name = option.substring(0, ixEq).trim();
-                    value = option.substring(ixEq + 1).trim();
-                }
-                Key keyToUse = null;
-                for (Key key : keys) {
-                    if (name.regionMatches(true, 0, key.name(), 0, name.length())) {
-                        keyToUse = key;
-                        break;
-                    }
-                }
-                if (keyToUse == null) {
-                    unknownOptions.add(name);
-                } else {
-                    options.put(keyToUse, value);
-                }
-            } else {
-                args.add(arg);
-            }
+            parseOption(arg).ifPresentOrElse(option -> processOption(option, options, unknownOptions, keys, iterator), () -> args.add(arg));
         }
         return args;
     }
 
-    private void verifyHash(String hashToMatch, String fileName) throws IOException, NoSuchAlgorithmException {
+    private static Optional<String> parseOption(String arg) {
+        int ix = 0;
+        while (ix < arg.length() && arg.charAt(ix) == '-') {
+            ix++;
+        }
+        return ix > 0 && ix < arg.length() ? Optional.of(arg.substring(ix)) : Optional.empty();
+    }
+
+    private static void processOption(String option, Map<Key, String> options, List<String> unknownOptions, Key[] keys, Iterator<String> iterator) {
+        NameValue nameValue = parseValue(option, iterator);
+        Arrays.stream(keys)
+                .filter(key -> nameValue.name().regionMatches(true, 0, key.name(), 0, nameValue.name().length()))
+                .findFirst()
+                .ifPresentOrElse(key -> options.put(key, nameValue.value()), () -> unknownOptions.add(nameValue.name()));
+    }
+
+    private static NameValue parseValue(String option, Iterator<String> iterator) {
+        int ix = option.indexOf('=');
+        return ix == -1
+                ? new NameValue(option.trim(), iterator.hasNext() ? iterator.next() : null)
+                : new NameValue(option.substring(0, ix).trim(), option.substring(ix + 1).trim());
+    }
+
+    private void verifyHash(String hashToMatch, String fileName) {
         String digestAlgorithm = getHashAlgorithm();
         String[] algorithms = commaSplitter.split(digestAlgorithm);
-        boolean matches = false;
-        for (String algorithm : algorithms) {
-            String hash = getHash(fileName, algorithm);
-            matches = hash.equalsIgnoreCase(hashToMatch);
-            if (matches) {
-                System.out.printf("Match using %s: %b%n", algorithm, matches);
-                break;
-            }
-        }
-        if (!matches) {
-            System.out.printf("Match using %s: %b%n", String.join(" or ", algorithms), matches);
-        }
+        Arrays.stream(algorithms)
+                .filter(algorithm -> getHash(fileName, algorithm).equalsIgnoreCase(hashToMatch))
+                .findFirst()
+                .ifPresentOrElse(s -> System.out.printf("Match using %s: %b%n", s, true),
+                                 () -> System.out.printf("Match using %s: %b%n", String.join(" or ", algorithms), false));
     }
 
     private String getHashAlgorithm() {
         return System.getProperty("digest", options.get(Key.digest));
     }
 
-    private void showHash(String fileName) throws IOException, NoSuchAlgorithmException {
-        String digestAlgorithm = getHashAlgorithm();
-        String[] algorithms = commaSplitter.split(digestAlgorithm);
-        for (String algorithm : algorithms) {
-            String hash = getHash(fileName, algorithm);
-            System.out.printf("Hash %s: %s%n", algorithm, hash);
-        }
+    private void showHash(String fileName) {
+        commaSplitter.splitAsStream(getHashAlgorithm())
+                .forEach(algorithm -> System.out.printf("Hash %s: %s%n", algorithm, getHash(fileName, algorithm)));
     }
 
-    private String getHash(String fileName, String digestAlgorithm) throws NoSuchAlgorithmException, IOException {
+    private String getHash(String fileName, String digestAlgorithm) {
         Path path = Paths.get(fileName);
-        MessageDigest messageDigest = MessageDigest.getInstance(digestAlgorithm);
-        try (FileChannel byteChannel = (FileChannel) Files.newByteChannel(path, StandardOpenOption.READ)) {
-            MappedByteBuffer mappedByteBuffer = byteChannel.map(FileChannel.MapMode.READ_ONLY, 0, byteChannel.size());
-            messageDigest.update(mappedByteBuffer);
+        try {
+            MessageDigest messageDigest = MessageDigest.getInstance(digestAlgorithm);
+            try (FileChannel byteChannel = (FileChannel) Files.newByteChannel(path, StandardOpenOption.READ)) {
+                MappedByteBuffer mappedByteBuffer = byteChannel.map(FileChannel.MapMode.READ_ONLY, 0, byteChannel.size());
+                messageDigest.update(mappedByteBuffer);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+            byte[] digest = messageDigest.digest();
+            return toHexString(digest);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalArgumentException(e);
         }
-        byte[] digest = messageDigest.digest();
-        return toHexString(digest);
     }
 
     private String toHexString(byte[] digest) {
@@ -200,4 +187,6 @@ public class Verifier {
         System.out.println("  Standard hash algorithms as of Java 17:");
         System.out.println("    MD2, MD4, MD5, SHA-1, SHA-224, SHA-256, SHA-384, SHA-512, SHA-512/224, SHA-512/256, SHA3-224, SHA3-256, SHA3-512");
     }
+
+    private record NameValue(String name, String value) {}
 }
