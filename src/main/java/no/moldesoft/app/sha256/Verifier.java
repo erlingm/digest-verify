@@ -4,10 +4,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
+import java.nio.file.*;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
@@ -23,6 +20,8 @@ public class Verifier {
     public static void main(String[] args) {
         try {
             new Verifier().run(args);
+        } catch (FileException e) {
+            System.out.printf("File \"%s\" not found%n", e.getFileName());
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -152,6 +151,8 @@ public class Verifier {
             try (FileChannel byteChannel = (FileChannel) Files.newByteChannel(path, StandardOpenOption.READ)) {
                 MappedByteBuffer mappedByteBuffer = byteChannel.map(FileChannel.MapMode.READ_ONLY, 0, byteChannel.size());
                 messageDigest.update(mappedByteBuffer);
+            } catch (NoSuchFileException e) {
+                throw new FileException(e);
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }
@@ -173,20 +174,36 @@ public class Verifier {
     }
 
     private void help() {
-        System.out.println("Usage:");
-        System.out.println("  Supply one or two arguments.");
-        System.out.println("  One argument version: supply name of file to be checked as argument");
-        System.out.println("  Two argument version: first argument: hash to match, second argument: name of file");
-        System.out.println("  With named arguments (names may be abbreviated):");
-        System.out.println(
-                "    -digest=<algorithm> or -digest <algorithm>, algorithm is any available algorithm from Java");
-        System.out.println("    -file=<file> or -file <file>, file to check");
-        System.out.println("    -hash=<hash> or -hash <hash>, hash to verify");
-        System.out.println("  System variables:");
-        System.out.println("    -Ddigest=<algorithm>, default algorithm is SHA-256");
-        System.out.println("  Standard hash algorithms as of Java 17:");
-        System.out.println("    MD2, MD4, MD5, SHA-1, SHA-224, SHA-256, SHA-384, SHA-512, SHA-512/224, SHA-512/256, SHA3-224, SHA3-256, SHA3-512");
+        String helpText =
+                """
+                Version: 2.1
+                Usage:
+                  Supply one or two arguments.
+                  One argument version: supply name of file to be checked as argument
+                  Two argument version: first argument: hash to match, second argument: name of file
+                  With named arguments (names may be abbreviated):
+                    -digest=<algorithm> or -digest <algorithm>, algorithm is any available algorithm from Java
+                    -file=<file> or -file <file>, file to check
+                    -hash=<hash> or -hash <hash>, hash to verify
+                  System variables:
+                    -Ddigest=<algorithm>, default algorithm is SHA-256
+                  Standard hash algorithms as of Java 17:
+                    MD2, MD4, MD5, SHA-1, SHA-224, SHA-256, SHA-384, SHA-512, SHA-512/224, SHA-512/256, SHA3-224, SHA3-256, SHA3-512""";
+        System.out.println(helpText);
     }
 
     private record NameValue(String name, String value) {}
+
+    private static class FileException extends RuntimeException {
+
+        private final String fileName;
+
+        public FileException(NoSuchFileException e) {
+            fileName = e.getFile();
+        }
+
+        public String getFileName() {
+            return fileName;
+        }
+    }
 }
