@@ -10,3 +10,13 @@
 * Place the sha.jar file in your path
 
 _The associated filetype (ftype) can be anything you like, so you can create your own if you want to. Remember to update the reference to it with the `assoc` command if you do._
+
+**PS:** _This procedure does not work on Windows 11_
+
+To create a module jar:
+
+`jar --create --file mods\sha.jar --main-class no.moldesoft.app.sha256.Verifier -C target\classes .`
+
+To run as modular jar:
+
+`java -p mods -m no.moldesoft.sha.verifier`

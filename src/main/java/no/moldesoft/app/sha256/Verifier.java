@@ -1,6 +1,7 @@
 package no.moldesoft.app.sha256;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
@@ -174,9 +175,17 @@ public class Verifier {
     }
 
     private void help() {
+        Properties properties = new Properties();
+        try (InputStream inputStream = getClass().getResourceAsStream("/application.properties")) {
+            properties.load(inputStream);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        String version = properties.getProperty("version");
         String helpText =
                 """
-                Version: 2.1
+
+                Version: %s
                 Usage:
                   Supply one or two arguments.
                   One argument version: supply name of file to be checked as argument
@@ -188,8 +197,9 @@ public class Verifier {
                   System variables:
                     -Ddigest=<algorithm>, default algorithm is SHA-256
                   Standard hash algorithms as of Java 17:
-                    MD2, MD4, MD5, SHA-1, SHA-224, SHA-256, SHA-384, SHA-512, SHA-512/224, SHA-512/256, SHA3-224, SHA3-256, SHA3-512""";
-        System.out.println(helpText);
+                    MD2, MD4, MD5, SHA-1, SHA-224, SHA-256, SHA-384, SHA-512, SHA-512/224, SHA-512/256, SHA3-224, SHA3-256, SHA3-512
+                """;
+        System.out.printf(helpText, version);
     }
 
     private record NameValue(String name, String value) {}
