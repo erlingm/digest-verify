@@ -50,15 +50,15 @@ public class Verifier {
 
     void processNoOptionsArgs(Map<Key, String> options, List<String> noOptionsArgs) {
         switch (noOptionsArgs.size()) {
-            case 1:
+            case 1 -> {
                 if (!options.containsKey(Key.file)) {
                     options.put(Key.file, noOptionsArgs.get(0).trim());
                 } else if (!options.containsKey(Key.hash)) {
                     String hashValue = noOptionsArgs.get(0).trim();
                     options.put(Key.hash, hashValue);
                 }
-                break;
-            case 2:
+            }
+            case 2 -> {
                 if (!options.containsKey(Key.file)) {
                     options.put(Key.file, noOptionsArgs.get(1).trim());
                 }
@@ -67,7 +67,7 @@ public class Verifier {
                     options.put(Key.hash, hashValue);
                     checkDigest(options);
                 }
-                break;
+            }
         }
         options.putIfAbsent(Key.digest, "SHA-256");
     }
@@ -176,7 +176,7 @@ public class Verifier {
     private void help() {
         String helpText =
                 """
-                Version: 2.1
+                Version: 2.2
                 Usage:
                   Supply one or two arguments.
                   One argument version: supply name of file to be checked as argument
