@@ -15,7 +15,7 @@ import java.util.regex.Pattern;
  */
 public class Verifier {
     private static final Pattern commaSplitter = Pattern.compile(",");
-    private Map<Key, String> options;
+    private final Map<Key, String> options = new EnumMap<>(Key.class);
 
     public static void main(String[] args) {
         try {
@@ -28,11 +28,13 @@ public class Verifier {
     }
 
     private void run(String[] args) {
-        options = new EnumMap<>(Key.class);
         List<String> unknownOptions = new ArrayList<>();
         List<String> noOptionsArgs = options(args, options, unknownOptions);
         if (unknownOptions.isEmpty()) {
             processNoOptionsArgs(options, noOptionsArgs);
+            if (options.containsKey(Key.debug)) {
+                System.out.println("options = " + options);
+            }
             if (options.containsKey(Key.file)) {
                 if (options.containsKey(Key.hash)) {
                     verifyHash(options.get(Key.hash), options.get(Key.file));
@@ -69,7 +71,7 @@ public class Verifier {
                 }
             }
         }
-        options.putIfAbsent(Key.digest, "SHA-256");
+        options.putIfAbsent(Key.digest, getHashAlgorithm());
     }
 
     private void checkDigest(Map<Key, String> options) {
@@ -78,7 +80,7 @@ public class Verifier {
 
     private String lookup(String hash) {
         return switch (hash.length() >>> 1) {
-            case 16 -> "MD5,MD4,MD2";
+            case 16 -> "MD5,MD2";
             case 20 -> "SHA-1";
             case 28 -> "SHA-512/224,SHA3-224,SHA-224";
             case 32 -> "SHA-256,SHA-512/256,SHA3-256";
@@ -88,8 +90,6 @@ public class Verifier {
             default -> throw new RuntimeException("Unknown length of hash string, can't guess which algorithm");
         };
     }
-
-    enum Key {digest, hash, file}
 
     List<String> options(String[] allArgs, Map<Key, String> options, List<String> unknownOptions) {
         List<String> args = new ArrayList<>();
@@ -103,26 +103,35 @@ public class Verifier {
     }
 
     private static Optional<String> parseOption(String arg) {
-        int ix = 0;
-        while (ix < arg.length() && arg.charAt(ix) == '-') {
-            ix++;
+        if (arg != null && arg.length() >= 2 && arg.charAt(0) == '-') {
+            return Optional.of(arg.substring(1));
         }
-        return ix > 0 && ix < arg.length() ? Optional.of(arg.substring(ix)) : Optional.empty();
+        return Optional.empty();
     }
 
     private static void processOption(String option, Map<Key, String> options, List<String> unknownOptions, Key[] keys, Iterator<String> iterator) {
-        NameValue nameValue = parseValue(option, iterator);
+        NameValue nameValue = parseKeyValue(option, iterator, keys);
         Arrays.stream(keys)
                 .filter(key -> nameValue.name().regionMatches(true, 0, key.name(), 0, nameValue.name().length()))
                 .findFirst()
                 .ifPresentOrElse(key -> options.put(key, nameValue.value()), () -> unknownOptions.add(nameValue.name()));
     }
 
-    private static NameValue parseValue(String option, Iterator<String> iterator) {
+    private static NameValue parseKeyValue(String option, Iterator<String> iterator, Key[] keys) {
         int ix = option.indexOf('=');
-        return ix == -1
-                ? new NameValue(option.trim(), iterator.hasNext() ? iterator.next() : null)
-                : new NameValue(option.substring(0, ix).trim(), option.substring(ix + 1).trim());
+        String optionKey;
+        String optionValue = null;
+        if (ix == -1) {
+            optionKey = option.trim();
+            Optional<Key> matchedKey = Arrays.stream(keys).filter(key -> optionKey.regionMatches(true, 0, key.name(), 0, optionKey.length())).findFirst();
+            if (matchedKey.isPresent() && matchedKey.get().optionType() == OptionType.property && iterator.hasNext()) {
+                optionValue = iterator.next();
+            }
+        } else {
+            optionKey = option.substring(0, ix).trim();
+            optionValue = option.substring(ix + 1).trim();
+        }
+        return new NameValue(optionKey, optionValue);
     }
 
     private void verifyHash(String hashToMatch, String fileName) {
@@ -132,11 +141,19 @@ public class Verifier {
                 .filter(algorithm -> getHash(fileName, algorithm).equalsIgnoreCase(hashToMatch))
                 .findFirst()
                 .ifPresentOrElse(s -> System.out.printf("Match using %s: %b%n", s, true),
-                                 () -> System.out.printf("Match using %s: %b%n", String.join(" or ", algorithms), false));
+                        () -> System.out.printf("Match using %s: %b%n", String.join(" or ", algorithms), false));
     }
 
     private String getHashAlgorithm() {
-        return System.getProperty("digest", options.get(Key.digest));
+        String digest = options.get(Key.digest);
+        if (digest != null) {
+            return digest;
+        }
+        digest = System.getProperty("digest", System.getenv("ms-digest"));
+        if (digest != null) {
+            return digest;
+        }
+        return "SHA-256";
     }
 
     private void showHash(String fileName) {
@@ -176,34 +193,22 @@ public class Verifier {
     private void help() {
         String helpText =
                 """
-                Version: 2.2
-                Usage:
-                  Supply one or two arguments.
-                  One argument version: supply name of file to be checked as argument
-                  Two argument version: first argument: hash to match, second argument: name of file
-                  With named arguments (names may be abbreviated):
-                    -digest=<algorithm> or -digest <algorithm>, algorithm is any available algorithm from Java
-                    -file=<file> or -file <file>, file to check
-                    -hash=<hash> or -hash <hash>, hash to verify
-                  System variables:
-                    -Ddigest=<algorithm>, default algorithm is SHA-256
-                  Standard hash algorithms as of Java 17:
-                    MD2, MD4, MD5, SHA-1, SHA-224, SHA-256, SHA-384, SHA-512, SHA-512/224, SHA-512/256, SHA3-224, SHA3-256, SHA3-512""";
+                        Version: 2.2
+                        Usage:
+                          Supply one or two arguments.
+                          One argument version: supply name of file to be checked as argument
+                          Two argument version: first argument: hash to match, second argument: name of file
+                          With named arguments (names may be abbreviated):
+                            -digest=<algorithm> or -digest <algorithm>, algorithm is any available algorithm from Java
+                            -file=<file> or -file <file>, file to check
+                            -hash=<hash> or -hash <hash>, hash to verify
+                          System variables:
+                            -Ddigest=<algorithm>, default algorithm is SHA-256
+                          Environment variables (optional):
+                            ms-digest=<algorithm>
+                          Standard hash algorithms as of Java 23:
+                            MD2, MD5, SHA-1, SHA-224, SHA-256, SHA-384, SHA-512, SHA-512/224, SHA-512/256, SHA3-224, SHA3-256, SHA3-512""";
         System.out.println(helpText);
     }
 
-    private record NameValue(String name, String value) {}
-
-    private static class FileException extends RuntimeException {
-
-        private final String fileName;
-
-        public FileException(NoSuchFileException e) {
-            fileName = e.getFile();
-        }
-
-        public String getFileName() {
-            return fileName;
-        }
-    }
 }
