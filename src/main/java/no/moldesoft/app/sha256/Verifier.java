@@ -52,9 +52,9 @@ public class Verifier {
         switch (noOptionsArgs.size()) {
             case 1 -> {
                 if (!options.containsKey(Key.file)) {
-                    options.put(Key.file, noOptionsArgs.get(0).trim());
+                    options.put(Key.file, noOptionsArgs.getFirst().trim());
                 } else if (!options.containsKey(Key.hash)) {
-                    String hashValue = noOptionsArgs.get(0).trim();
+                    String hashValue = noOptionsArgs.getFirst().trim();
                     options.put(Key.hash, hashValue);
                 }
             }
@@ -63,7 +63,7 @@ public class Verifier {
                     options.put(Key.file, noOptionsArgs.get(1).trim());
                 }
                 if (!options.containsKey(Key.hash)) {
-                    String hashValue = noOptionsArgs.get(0).trim();
+                    String hashValue = noOptionsArgs.getFirst().trim();
                     options.put(Key.hash, hashValue);
                     checkDigest(options);
                 }
@@ -73,7 +73,7 @@ public class Verifier {
     }
 
     private void checkDigest(Map<Key, String> options) {
-        options.computeIfAbsent(Key.digest, key -> lookup(options.get(Key.hash)));
+        options.computeIfAbsent(Key.digest, _ -> lookup(options.get(Key.hash)));
     }
 
     private String lookup(String hash) {
