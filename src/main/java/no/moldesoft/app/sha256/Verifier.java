@@ -17,7 +17,7 @@ public class Verifier {
     private static final Pattern commaSplitter = Pattern.compile(",");
     private final Map<Key, String> options = new EnumMap<>(Key.class);
 
-    public static void main(String[] args) {
+    static void main(String[] args) {
         try {
             new Verifier().run(args);
         } catch (FileException e) {
@@ -203,11 +203,12 @@ public class Verifier {
                             -file=<file> or -file <file>, file to check
                             -hash=<hash> or -hash <hash>, hash to verify
                           System variables:
-                            -Ddigest=<algorithm>, default algorithm is SHA-256
+                            -Ddigest=<algorithm>, default algorithm is SHA-256, which can be overridden by environment variable ms-digest
                           Environment variables (optional):
                             ms-digest=<algorithm>
-                          Standard hash algorithms as of Java 23:
-                            MD2, MD5, SHA-1, SHA-224, SHA-256, SHA-384, SHA-512, SHA-512/224, SHA-512/256, SHA3-224, SHA3-256, SHA3-512""";
+                          Standard hash algorithms as of Java 25:
+                            MD2, MD5, SHA-1, SHA-224, SHA-256, SHA-384, SHA-512, SHA-512/224, SHA-512/256, SHA3-224, SHA3-256, SHA3-384, SHA3-512, SHAKE128-256, SHAKE256-512
+                          The maximum length of a file this program can handle, is limited to 2 GiB""";
         System.out.println(helpText);
     }
 
