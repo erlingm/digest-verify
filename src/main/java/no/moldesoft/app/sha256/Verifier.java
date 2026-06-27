@@ -23,6 +23,7 @@ public class Verifier {
         } catch (FileException e) {
             System.out.printf("File \"%s\" not found%n", e.getFileName());
         } catch (Exception e) {
+            //noinspection CallToPrintStackTrace
             e.printStackTrace();
         }
     }
