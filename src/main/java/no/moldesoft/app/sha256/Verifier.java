@@ -2,6 +2,8 @@ package no.moldesoft.app.sha256;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.*;
@@ -167,8 +169,11 @@ public class Verifier {
         try {
             MessageDigest messageDigest = MessageDigest.getInstance(digestAlgorithm);
             try (FileChannel byteChannel = (FileChannel) Files.newByteChannel(path, StandardOpenOption.READ)) {
-                MappedByteBuffer mappedByteBuffer = byteChannel.map(FileChannel.MapMode.READ_ONLY, 0, byteChannel.size());
-                messageDigest.update(mappedByteBuffer);
+                try {
+                    doDigest(byteChannel, messageDigest);
+                } catch (IllegalArgumentException e) {
+                    doDigestByMemorySegments(byteChannel, messageDigest);
+                }
             } catch (NoSuchFileException e) {
                 throw new FileException(e);
             } catch (IOException e) {
@@ -178,6 +183,29 @@ public class Verifier {
             return toHexString(digest);
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalArgumentException(e);
+        }
+    }
+
+    private static void doDigest(FileChannel byteChannel, MessageDigest messageDigest) throws IOException {
+        MappedByteBuffer mappedByteBuffer = byteChannel.map(FileChannel.MapMode.READ_ONLY, 0, byteChannel.size());
+        messageDigest.update(mappedByteBuffer);
+    }
+
+    private static void doDigestByMemorySegments(FileChannel byteChannel, MessageDigest messageDigest) throws IOException {
+        try (Arena arena = Arena.ofConfined()) {
+            long fileSize = byteChannel.size();
+            MemorySegment segment = byteChannel.map(FileChannel.MapMode.READ_ONLY, 0, fileSize, arena);
+            long sliceLength = 1024 * 1024 * 1024;
+            long fullSlices = fileSize / sliceLength;
+            long lastSegmentSize = fileSize % sliceLength;
+            for (long i = 0; i < fullSlices; i++) {
+                MemorySegment slice = segment.asSlice(i * sliceLength, sliceLength);
+                messageDigest.update(slice.asByteBuffer());
+            }
+            if (lastSegmentSize > 0) {
+                MemorySegment slice = segment.asSlice(fullSlices * sliceLength, lastSegmentSize);
+                messageDigest.update(slice.asByteBuffer());
+            }
         }
     }
 
@@ -194,7 +222,7 @@ public class Verifier {
     private void help() {
         String helpText =
                 """
-                        Version: 2.2
+                        Version: 2.3
                         Usage:
                           Supply one or two arguments.
                           One argument version: supply name of file to be checked as argument
