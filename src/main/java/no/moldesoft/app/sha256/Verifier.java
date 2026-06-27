@@ -237,7 +237,7 @@ public class Verifier {
                             ms-digest=<algorithm>
                           Standard hash algorithms as of Java 25:
                             MD2, MD5, SHA-1, SHA-224, SHA-256, SHA-384, SHA-512, SHA-512/224, SHA-512/256, SHA3-224, SHA3-256, SHA3-384, SHA3-512, SHAKE128-256, SHAKE256-512
-                          The maximum length of a file this program can handle, is limited to 2 GiB""";
+                          This program is using MemorySegment and Arena from Java 25 as Memory mapped files when files are larger than 2 GiB""";
         System.out.println(helpText);
     }
 
