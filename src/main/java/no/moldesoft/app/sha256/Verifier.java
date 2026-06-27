@@ -172,7 +172,8 @@ public class Verifier {
                 try {
                     doDigest(byteChannel, messageDigest);
                 } catch (IllegalArgumentException e) {
-                    doDigestByMemorySegments(byteChannel, messageDigest);
+                    doDigestByMemorySegments(byteChannel, messageDigest, options.containsKey(Key.debug));
+                    options.remove(Key.debug);
                 }
             } catch (NoSuchFileException e) {
                 throw new FileException(e);
@@ -191,13 +192,22 @@ public class Verifier {
         messageDigest.update(mappedByteBuffer);
     }
 
-    private static void doDigestByMemorySegments(FileChannel byteChannel, MessageDigest messageDigest) throws IOException {
+    private static void doDigestByMemorySegments(FileChannel byteChannel, MessageDigest messageDigest, boolean doDebug) throws IOException {
         try (Arena arena = Arena.ofConfined()) {
             long fileSize = byteChannel.size();
             MemorySegment segment = byteChannel.map(FileChannel.MapMode.READ_ONLY, 0, fileSize, arena);
             long sliceLength = 1024 * 1024 * 1024;
             long fullSlices = fileSize / sliceLength;
             long lastSegmentSize = fileSize % sliceLength;
+            if (doDebug) {
+                System.out.printf(Locale.of("no", "NO"), """
+                        Memory segment info:
+                                    file size: %,d
+                           segment slice size: %,d
+                                  full slices: %,d
+                              last slice size: %,d
+                        """, fileSize, sliceLength, fullSlices, lastSegmentSize);
+            }
             for (long i = 0; i < fullSlices; i++) {
                 MemorySegment slice = segment.asSlice(i * sliceLength, sliceLength);
                 messageDigest.update(slice.asByteBuffer());
